@@ -8,7 +8,7 @@ setuptools.setup(author='Chris Rosenthal',
                  author_email='crosenth@gmail.com',
                  classifiers=[
                      'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-                     'Development Status :: 3 - Alpha',
+                     'Development Status :: 4 - Beta'
                      'Environment :: Console',
                      'Operating System :: OS Independent',
                      'Intended Audience :: End Users/Desktop',
