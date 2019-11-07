@@ -1,8 +1,4 @@
 import setuptools
-import sys
-
-if sys.version_info < (3, 0):
-    raise EnvironmentError('Please install using pip3 or python3')
 
 setuptools.setup(author='Chris Rosenthal',
                  author_email='crosenth@gmail.com',
@@ -15,6 +11,7 @@ setuptools.setup(author='Chris Rosenthal',
                      'License :: OSI Approved :: '
                      'GNU General Public License v3 (GPLv3)',
                      'Programming Language :: Python :: 3 :: Only'],
+                 python_requires='>=3.3',
                  description='AWS Batch helper',
                  entry_points={
                      'console_scripts': {'aws_batch=aws_batch:main'}},
