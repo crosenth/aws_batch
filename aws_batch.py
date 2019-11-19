@@ -24,15 +24,17 @@ import subprocess
 import sys
 import time
 
+REGION_NAME = 'us-west-2'
+
 batch = boto3.client(
     service_name='batch',
-    region_name='us-west-2',
-    endpoint_url='https://batch.us-west-2.amazonaws.com')
+    region_name=REGION_NAME,
+    endpoint_url='https://batch.{}.amazonaws.com'.format(REGION_NAME))
 
 cloudwatch = boto3.client(
     service_name='logs',
-    region_name='us-west-2',
-    endpoint_url='https://logs.us-west-2.amazonaws.com')
+    region_name=REGION_NAME,
+    endpoint_url='https://logs.{}.amazonaws.com'.format(REGION_NAME))
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -51,7 +53,12 @@ parser.add_argument(
 parser.add_argument(
     "--job-queue",
     default='optimal',
-    help="name of the job queue to submit this job %(default)s",
+    help="name of the job queue to submit this job (default: \"%(default)s)\"",
+    type=str)
+parser.add_argument(
+    "--region-name",
+    default=REGION_NAME,
+    help="(default: \"%(default)s)\"",
     type=str)
 s3_parser = parser.add_argument_group('s3 configuration')
 s3_parser.add_argument(
@@ -199,9 +206,9 @@ def main():
     outputs = args.outputs.split(',') if args.outputs else []
     sh = container_sh(
         args.awscli, args.bucket, args.workdir, args.command, inputs, outputs)
-    logging.info(sh)
     if args.bucket:
         s3_upload(args.bucket, args.workdir, inputs)
+    logging.info(sh)
     submitJobResponse = batch.submit_job(
         jobName=args.job_name,
         jobQueue=args.job_queue,
