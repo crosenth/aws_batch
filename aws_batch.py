@@ -11,7 +11,7 @@ Requirements:
 2. awscli must be available in the container for moving data to and from
 the AWS S3 bucket
 
-Inpired from https://github.com/awslabs/aws-batch-helpers/
+Extended from https://github.com/awslabs/aws-batch-helpers/
 blob/master/gpu-example/submit-job.py
 '''
 import argparse
@@ -52,7 +52,7 @@ parser.add_argument(
     type=str)
 parser.add_argument(
     "--job-queue",
-    default='optimal',
+    default='spot-test',
     help="name of the job queue to submit this job (default: \"%(default)s)\"",
     type=str)
 parser.add_argument(
