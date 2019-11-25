@@ -52,7 +52,7 @@ parser.add_argument(
     type=str)
 parser.add_argument(
     "--job-queue",
-    default='spot-test',
+    default='optimal',
     help="name of the job queue to submit this job (default: \"%(default)s)\"",
     type=str)
 parser.add_argument(
@@ -85,6 +85,15 @@ container_parser.add_argument(
     "--workdir",
     default='tmp',
     help='container folder to execute command')
+container_parser.add_argument(
+    '--cpus',
+    type=int,
+    help='number of vCPUs to reserve for the container')
+container_parser.add_argument(
+    '--memory',
+    type=int,
+    metavar='GiB',
+    help='number of GiB (~1GB) of memory reserved for the job')
 logging_parser = parser.add_argument_group(
     title='logging and version options')
 logging_parser.add_argument(
@@ -127,9 +136,9 @@ def printLogs(logStreamName, startTime):
             lastTimestamp = event['timestamp']
             lastTime = lastTimestamp / 1000.0
             timestamp = datetime.datetime.utcfromtimestamp(lastTime)
-            print(event['message'])
-            logging.info('[{:%Y-%m-%d %H:%M:%S}] {}'.format(
-                timestamp, event['message']))
+            msg = event['message'].strip()
+            print(msg)
+            logging.debug('[{:%Y-%m-%d %H:%M:%S}] {}'.format(timestamp, msg))
         nextToken = logEvents['nextForwardToken']
         if nextToken and kwargs.get('nextToken') != nextToken:
             kwargs['nextToken'] = nextToken
@@ -204,17 +213,21 @@ def main():
     check_args(args)
     inputs = args.inputs.split(',') if args.inputs else []
     outputs = args.outputs.split(',') if args.outputs else []
-    sh = container_sh(
-        args.awscli, args.bucket, args.workdir, args.command, inputs, outputs)
     if args.bucket:
         s3_upload(args.bucket, args.workdir, inputs)
+    sh = container_sh(
+        args.awscli, args.bucket, args.workdir, args.command, inputs, outputs)
+    overrides = {'command': ['/bin/bash',  '-c', sh]}
+    if args.cpus:
+        overrides.update({'vcpus': args.cpus})
+    if args.memory:
+        overrides.update({'memory': args.memory * 1024})
     logging.info(sh)
     submitJobResponse = batch.submit_job(
         jobName=args.job_name,
         jobQueue=args.job_queue,
         jobDefinition=args.job_definition,
-        containerOverrides={'command': ['/bin/bash',  '-c', sh]}
-    )
+        containerOverrides=overrides)
     jobId = submitJobResponse['jobId']
     logStreamName = None
     startTime = 0
@@ -225,7 +238,7 @@ def main():
         describeJobsResponse = batch.describe_jobs(jobs=[jobId])
         job = describeJobsResponse['jobs'][0]
         if status != job['status']:
-            status = job['status']
+            status = job['status'].strip()
             if status not in ['SUCCEEDED', 'FAILED']:
                 logging.info(status)
             if status in ['RUNNING', 'SUCCEEDED', 'FAILED']:
@@ -247,8 +260,9 @@ def main():
                 cmd.split(),
                 check=True,
                 encoding='utf-8',
-                stdout=subprocess.PIPE).stdout
-            logging.info(out.strip())
+                stdout=subprocess.PIPE).stdout.strip()
+            if out:
+                logging.info(out)
 
 
 if __name__ == "__main__":
