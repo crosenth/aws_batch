@@ -46,7 +46,7 @@ parser.add_argument(
 parser.add_argument(
     "--region-name",
     default='us-west-2',
-    help="(default: \"%(default)s)\"",
+    help="(default: %(default)s)",
     type=str)
 s3_parser = parser.add_argument_group('s3 configuration')
 s3_parser.add_argument(
@@ -71,8 +71,8 @@ container_parser.add_argument(
           "container/ami (default: %(default)s)"))
 container_parser.add_argument(
     "--workdir",
-    default='tmp',
-    help='container folder to execute command')
+    default='/tmp',
+    help='container folder to execute command (default: %(default)s)')
 container_parser.add_argument(
     '--cpus',
     type=int,
@@ -138,25 +138,27 @@ def printLogs(cloudwatch, logStreamName, startTime):
 # TODO: raise error if no awscli in container
 # TODO: figure out aws batch/container error handling
 def container_sh(cli, bucket, workdir, cmd, inputs, outputs):
+    s3_workdir = workdir.lstrip('/')
     commands = ['mkdir -p ' + workdir]
     for i in inputs + outputs:
         path = os.path.join(workdir, os.path.dirname(i))
         commands.append('mkdir -p ' + path)
     for i in inputs:
-        s3_path = os.path.join(bucket, workdir, i)
+        s3_path = os.path.join(bucket, s3_workdir, i.lstrip('/'))
         container_path = os.path.join(workdir, i)
         commands.append('{} s3 cp {} {}'.format(cli, s3_path, container_path))
     commands.append('cd ' + workdir)
     commands.append(cmd)
     for i in outputs:
-        s3_path = os.path.join(bucket, workdir, i)
+        s3_path = os.path.join(bucket, s3_workdir, i.lstrip('/'))
         commands.append('{} s3 cp {} {}'.format(cli, i, s3_path))
     return '; '.join(commands)
 
 
 def s3_download(bucket, workdir, outputs):
     for i in outputs:
-        path = os.path.join(bucket, workdir, i)
+        path = os.path.join(bucket, workdir.lstrip('/'), i.lstrip('/'))
+        print(path)
         cmd = 'aws s3 cp {} {}'.format(path, i)
         out = subprocess.run(
             cmd.split(),
@@ -169,7 +171,7 @@ def s3_download(bucket, workdir, outputs):
 # TODO: check for local awscli
 def s3_upload(bucket, workdir, inputs):
     for i in inputs:
-        path = os.path.join(bucket, workdir, i)
+        path = os.path.join(bucket, workdir.lstrip('/'), i.lstrip('/'))
         cmd = 'aws s3 cp {} {}'.format(i, path)
         out = subprocess.run(
             cmd.split(),
@@ -210,7 +212,7 @@ def main():
     inputs = args.inputs.split(',') if args.inputs else []
     outputs = args.outputs.split(',') if args.outputs else []
     if args.bucket:
-        s3_upload(args.bucket, args.workdir, inputs)
+        s3_upload(args.bucket, args.workdir.lstrip('/'), inputs)
     sh = container_sh(
         args.awscli, args.bucket, args.workdir, args.command, inputs, outputs)
     overrides = {'command': ['/bin/bash',  '-c', sh]}
@@ -247,11 +249,10 @@ def main():
             if status in ['SUCCEEDED', 'FAILED']:
                 logging.info(status)
                 break
-
     if args.bucket:
         s3_download(args.bucket, args.workdir, outputs)
         if args.teardown:
-            cloud_path = os.path.join(args.bucket, args.workdir)
+            cloud_path = os.path.join(args.bucket, args.workdir.lstrip('/'))
             cmd = 'aws s3 rm --recursive ' + cloud_path
             out = subprocess.run(
                 cmd.split(),
