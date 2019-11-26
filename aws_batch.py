@@ -24,18 +24,6 @@ import subprocess
 import sys
 import time
 
-REGION_NAME = 'us-west-2'
-
-batch = boto3.client(
-    service_name='batch',
-    region_name=REGION_NAME,
-    endpoint_url='https://batch.{}.amazonaws.com'.format(REGION_NAME))
-
-cloudwatch = boto3.client(
-    service_name='logs',
-    region_name=REGION_NAME,
-    endpoint_url='https://logs.{}.amazonaws.com'.format(REGION_NAME))
-
 parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument(
@@ -57,7 +45,7 @@ parser.add_argument(
     type=str)
 parser.add_argument(
     "--region-name",
-    default=REGION_NAME,
+    default='us-west-2',
     help="(default: \"%(default)s)\"",
     type=str)
 s3_parser = parser.add_argument_group('s3 configuration')
@@ -93,7 +81,7 @@ container_parser.add_argument(
     '--memory',
     type=int,
     metavar='GiB',
-    help='number of GiB (~1GB) of memory reserved for the job')
+    help='number of GiB (~GB) of memory reserved for the job')
 logging_parser = parser.add_argument_group(
     title='logging and version options')
 logging_parser.add_argument(
@@ -124,7 +112,7 @@ logging_parser.add_argument(
 args = parser.parse_args()
 
 
-def printLogs(logStreamName, startTime):
+def printLogs(cloudwatch, logStreamName, startTime):
     kwargs = {'logGroupName': '/aws/batch/job',
               'logStreamName': logStreamName,
               'startTime': startTime,
@@ -211,6 +199,14 @@ def check_args(args):
 def main():
     setup_logging(args)
     check_args(args)
+    batch = boto3.client(
+        service_name='batch',
+        region_name=args.region_name,
+        endpoint_url='https://batch.{}.amazonaws.com'.format(args.region_name))
+    cloudwatch = boto3.client(
+        service_name='logs',
+        region_name=args.region_name,
+        endpoint_url='https://logs.{}.amazonaws.com'.format(args.region_name))
     inputs = args.inputs.split(',') if args.inputs else []
     outputs = args.outputs.split(',') if args.outputs else []
     if args.bucket:
@@ -246,7 +242,8 @@ def main():
                         'logStreamName' in job['container']):
                     logStreamName = job['container']['logStreamName']
                 if logStreamName:
-                    startTime = printLogs(logStreamName, startTime) + 1
+                    startTime = printLogs(cloudwatch, logStreamName, startTime)
+                    startTime += 1
             if status in ['SUCCEEDED', 'FAILED']:
                 logging.info(status)
                 break
