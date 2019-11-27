@@ -20,6 +20,6 @@ setuptools.setup(author='Chris Rosenthal',
                  license='GPLv3',
                  name='aws_batch',
                  packages=setuptools.find_packages(),
-                 version=0.2,
+                 version=0.3,
                  url='https://github.com/crosenth/aws_batch'
                  )
