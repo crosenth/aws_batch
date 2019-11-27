@@ -138,27 +138,24 @@ def printLogs(cloudwatch, logStreamName, startTime):
 # TODO: raise error if no awscli in container
 # TODO: figure out aws batch/container error handling
 def container_sh(cli, bucket, workdir, cmd, inputs, outputs):
-    s3_workdir = workdir.lstrip('/')
-    commands = ['mkdir -p ' + workdir]
+    commands = ['mkdir -p ' + workdir, 'cd ' + workdir]
     for i in inputs + outputs:
-        path = os.path.join(workdir, os.path.dirname(i))
-        commands.append('mkdir -p ' + path)
+        dname = os.path.dirname(i)
+        if dname:
+            commands.append('mkdir -p ' + dname)
     for i in inputs:
-        s3_path = os.path.join(bucket, s3_workdir, i.lstrip('/'))
-        container_path = os.path.join(workdir, i)
-        commands.append('{} s3 cp {} {}'.format(cli, s3_path, container_path))
-    commands.append('cd ' + workdir)
+        s3_path = os.path.join(bucket, i.lstrip('/'))
+        commands.append('{} s3 cp {} {}'.format(cli, s3_path, i))
     commands.append(cmd)
     for i in outputs:
-        s3_path = os.path.join(bucket, s3_workdir, i.lstrip('/'))
+        s3_path = os.path.join(bucket, i.lstrip('/'))
         commands.append('{} s3 cp {} {}'.format(cli, i, s3_path))
     return '; '.join(commands)
 
 
-def s3_download(bucket, workdir, outputs):
+def s3_download(bucket, outputs):
     for i in outputs:
-        path = os.path.join(bucket, workdir.lstrip('/'), i.lstrip('/'))
-        print(path)
+        path = os.path.join(bucket, i.lstrip('/'))
         cmd = 'aws s3 cp {} {}'.format(path, i)
         out = subprocess.run(
             cmd.split(),
@@ -169,9 +166,9 @@ def s3_download(bucket, workdir, outputs):
 
 
 # TODO: check for local awscli
-def s3_upload(bucket, workdir, inputs):
+def s3_upload(bucket, inputs):
     for i in inputs:
-        path = os.path.join(bucket, workdir.lstrip('/'), i.lstrip('/'))
+        path = os.path.join(bucket, i.lstrip('/'))
         cmd = 'aws s3 cp {} {}'.format(i, path)
         out = subprocess.run(
             cmd.split(),
@@ -211,10 +208,11 @@ def main():
         endpoint_url='https://logs.{}.amazonaws.com'.format(args.region_name))
     inputs = args.inputs.split(',') if args.inputs else []
     outputs = args.outputs.split(',') if args.outputs else []
+    workdir = args.workdir.lstrip('/')
     if args.bucket:
-        s3_upload(args.bucket, args.workdir.lstrip('/'), inputs)
+        s3_upload(args.bucket, inputs)
     sh = container_sh(
-        args.awscli, args.bucket, args.workdir, args.command, inputs, outputs)
+        args.awscli, args.bucket, workdir, args.command, inputs, outputs)
     overrides = {'command': ['/bin/bash',  '-c', sh]}
     if args.cpus:
         overrides.update({'vcpus': args.cpus})
@@ -250,9 +248,9 @@ def main():
                 logging.info(status)
                 break
     if args.bucket:
-        s3_download(args.bucket, args.workdir, outputs)
+        s3_download(args.bucket, outputs)
         if args.teardown:
-            cloud_path = os.path.join(args.bucket, args.workdir.lstrip('/'))
+            cloud_path = os.path.join(args.bucket, workdir)
             cmd = 'aws s3 rm --recursive ' + cloud_path
             out = subprocess.run(
                 cmd.split(),
