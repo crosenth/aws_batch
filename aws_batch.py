@@ -145,11 +145,11 @@ def container_sh(cli, bucket, workdir, cmd, inputs, outputs):
             commands.append('mkdir -p ' + dname)
     for i in inputs:
         s3_path = os.path.join(bucket, i.lstrip('/'))
-        commands.append('{} s3 cp {} {}'.format(cli, s3_path, i))
+        commands.append('{} s3 cp --quiet {} {}'.format(cli, s3_path, i))
     commands.append(cmd)
     for i in outputs:
         s3_path = os.path.join(bucket, i.lstrip('/'))
-        commands.append('{} s3 cp {} {}'.format(cli, i, s3_path))
+        commands.append('{} s3 cp --quiet {} {}'.format(cli, i, s3_path))
     return '; '.join(commands)
 
 
