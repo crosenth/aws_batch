@@ -15,11 +15,11 @@ setuptools.setup(author='Chris Rosenthal',
                  description='AWS Batch helper',
                  entry_points={
                      'console_scripts': {'aws_batch=aws_batch:main'}},
-                 install_requires=['awscli'],
-                 keywords=['aws', 'batch', 's3'],
+                 install_requires=['awscli', 'boto3'],
+                 keywords=['aws', 'batch', 's3', 'awscli', 'boto3'],
                  license='GPLv3',
                  name='aws_batch',
                  py_modules=['aws_batch'],
-                 version=0.4,
+                 version=0.5,
                  url='https://github.com/crosenth/aws_batch'
                  )
