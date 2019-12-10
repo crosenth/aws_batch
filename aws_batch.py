@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
-Given an AWS registered job-definition and optional command with inputs and
-outputs, this script moves data to and from a local filesystem into an AWS S3
+Given an AWS registered job-definition and optional command with uploads and
+downloads, this script moves data to and from a local filesystem into an AWS S3
 Bucket and Batch container for processing. All data written to the AWS Batch
 logging system is monitored and displayed to the user.
 
@@ -51,17 +51,17 @@ parser.add_argument(
 s3_parser = parser.add_argument_group('s3 configuration')
 s3_parser.add_argument(
     "--bucket",
-    help='s3 bucket url to stage inputs and outputs')
+    help='s3 bucket url to stage uploads and downloads')
 s3_parser.add_argument(
     "--dirty",
     action='store_false',
     dest='teardown',
     help='leave files in work bucket')
 s3_parser.add_argument(
-    "--inputs",
+    "--uploads",
     help='')
 s3_parser.add_argument(
-    "--outputs",
+    "--downloads",
     help='')
 container_parser = parser.add_argument_group('container options')
 container_parser.add_argument(
@@ -137,24 +137,27 @@ def printLogs(cloudwatch, logStreamName, startTime):
 
 # TODO: raise error if no awscli in container
 # TODO: figure out aws batch/container error handling
-def container_sh(cli, bucket, workdir, cmd, inputs, outputs):
+def container_sh(cli, bucket, workdir, cmd, uploads, downloads):
     commands = ['mkdir -p ' + workdir, 'cd ' + workdir]
-    for i in inputs + outputs:
+    for i in uploads + downloads:
         dname = os.path.dirname(i)
         if dname:
             commands.append('mkdir -p ' + dname)
-    for i in inputs:
+    for i in uploads:
         s3_path = os.path.join(bucket, i.lstrip('/'))
-        commands.append('{} s3 cp --quiet {} {}'.format(cli, s3_path, i))
+        commands.append('{} s3 cp --only-show-errors {} {}'.format(
+            cli, s3_path, i))
+        commands.append('chmod 777 ' + i)
     commands.append(cmd)
-    for i in outputs:
+    for i in downloads:
         s3_path = os.path.join(bucket, i.lstrip('/'))
-        commands.append('{} s3 cp --quiet {} {}'.format(cli, i, s3_path))
+        commands.append('{} s3 cp --only-show-errors {} {}'.format(
+            cli, i, s3_path))
     return '; '.join(commands)
 
 
-def s3_download(bucket, outputs):
-    for i in outputs:
+def s3_download(bucket, downloads):
+    for i in downloads:
         path = os.path.join(bucket, i.lstrip('/'))
         cmd = 'aws s3 cp {} {}'.format(path, i)
         out = subprocess.run(
@@ -166,8 +169,8 @@ def s3_download(bucket, outputs):
 
 
 # TODO: check for local awscli
-def s3_upload(bucket, inputs):
-    for i in inputs:
+def s3_upload(bucket, uploads):
+    for i in uploads:
         path = os.path.join(bucket, i.lstrip('/'))
         cmd = 'aws s3 cp {} {}'.format(i, path)
         out = subprocess.run(
@@ -189,10 +192,10 @@ def setup_logging(namespace):
 
 
 def check_args(args):
-    if not args.bucket and (args.inputs or args.outputs):
-        raise ValueError('--inputs and --outputs requires --bucket')
-    if args.bucket and not (args.inputs or args.outputs):
-        logging.warn('--buckets specified without --inputs or --outputs')
+    if not args.bucket and (args.uploads or args.downloads):
+        raise ValueError('--uploads and --downloads requires --bucket')
+    if args.bucket and not (args.uploads or args.downloads):
+        logging.warn('--bucket specified without --uploads or --downloads')
 
 
 def main():
@@ -206,13 +209,13 @@ def main():
         service_name='logs',
         region_name=args.region_name,
         endpoint_url='https://logs.{}.amazonaws.com'.format(args.region_name))
-    inputs = args.inputs.split(',') if args.inputs else []
-    outputs = args.outputs.split(',') if args.outputs else []
+    uploads = args.uploads.split(',') if args.uploads else []
+    downloads = args.downloads.split(',') if args.downloads else []
     workdir = args.workdir.lstrip('/')
     if args.bucket:
-        s3_upload(args.bucket, inputs)
+        s3_upload(args.bucket, uploads)
     sh = container_sh(
-        args.awscli, args.bucket, workdir, args.command, inputs, outputs)
+        args.awscli, args.bucket, workdir, args.command, uploads, downloads)
     overrides = {'command': ['/bin/bash',  '-c', sh]}
     if args.cpus:
         overrides.update({'vcpus': args.cpus})
@@ -248,7 +251,7 @@ def main():
                 logging.info(status)
                 break
     if args.bucket:
-        s3_download(args.bucket, outputs)
+        s3_download(args.bucket, downloads)
         if args.teardown:
             cloud_path = os.path.join(args.bucket, workdir)
             cmd = 'aws s3 rm --recursive ' + cloud_path
