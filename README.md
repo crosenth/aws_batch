@@ -26,3 +26,17 @@ or
 % pip install git+https://github.com/crosenth/aws_batch
 ```
 
+## Usage
+
+Running a simple command and sending the results to a script with a little verbosity `-v`:
+
+```
+aws_batch -v --job-queue some-queue --bucket s3://my_bucket/ --command "echo hello world > hello_world.txt" --downloads hello_world.txt some_job_definition
+Found credentials in shared credentials file: ~/.aws/credentials
+mkdir -p tmp; cd tmp; echo hello world > hello_world.txt; /home/ec2-user/miniconda/bin/aws s3 cp --only-show-errors hello_world.txt s3://my_bucket/hello_world.txt
+SUBMITTED
+RUNNABLE
+STARTING
+SUCCEEDED
+download: s3://my_bucket/hello_world.txt to hello_world.txt
+```
