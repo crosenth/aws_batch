@@ -40,7 +40,7 @@ import time
 parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument(
-    "job_definition",
+    "jobDefinition",
     help="name of the job job definition")
 parser.add_argument(
     "--command",
@@ -238,13 +238,13 @@ def main():
     submitJobResponse = batch.submit_job(
         jobName=args.job_name,
         jobQueue=args.job_queue,
-        jobDefinition=args.job_definition,
+        jobDefinition=args.jobDefinition,
         containerOverrides=overrides)
     jobId = submitJobResponse['jobId']
     logStreamName = None
     startTime = 0
     status = None
-    logging.info('{} "{}"'.format(args.job_definition, args.command))
+    logging.info('{} "{}"'.format(args.jobDefinition, args.command))
     while True:
         time.sleep(1)
         describeJobsResponse = batch.describe_jobs(jobs=[jobId])
