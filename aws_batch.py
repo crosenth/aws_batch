@@ -229,52 +229,60 @@ def main():
         s3_upload(args.bucket, uploads)
     sh = container_sh(
         args.awscli, args.bucket, workdir, args.command, uploads, downloads)
-    overrides = {'command': ['/bin/bash',  '-c', sh]}
+    containerOverrides = {'command': ['/bin/bash',  '-c', sh]}
     if args.cpus:
-        overrides.update({'vcpus': args.cpus})
+        containerOverrides.update({'vcpus': args.cpus})
     if args.memory:
-        overrides.update({'memory': args.memory * 1024})
-    logging.info(sh)
+        containerOverrides.update({'memory': args.memory * 1024})
+    logging.debug(sh)
     submitJobResponse = batch.submit_job(
         jobName=args.job_name,
         jobQueue=args.job_queue,
         jobDefinition=args.jobDefinition,
-        containerOverrides=overrides)
+        containerOverrides=containerOverrides)
     jobId = submitJobResponse['jobId']
     logStreamName = None
     startTime = 0
     status = None
-    logging.info('{} "{}"'.format(args.jobDefinition, args.command))
-    while True:
-        time.sleep(1)
-        describeJobsResponse = batch.describe_jobs(jobs=[jobId])
-        job = describeJobsResponse['jobs'][0]
-        if status != job['status']:
-            status = job['status'].strip()
-            if status not in ['SUCCEEDED', 'FAILED']:
-                logging.info(status)
-            if status in ['RUNNING', 'SUCCEEDED', 'FAILED']:
-                if (logStreamName is None and
-                        'logStreamName' in job['container']):
-                    logStreamName = job['container']['logStreamName']
-                if logStreamName:
-                    startTime = printLogs(cloudwatch, logStreamName, startTime)
-                    startTime += 1
-            if status in ['SUCCEEDED', 'FAILED']:
-                logging.info(status)
-                break
-    if args.bucket:
-        s3_download(args.bucket, downloads)
-        if args.teardown:
-            cloud_path = os.path.join(args.bucket, workdir)
-            cmd = 'aws s3 rm --recursive ' + cloud_path
-            out = subprocess.run(
-                cmd.split(),
-                check=True,
-                encoding='utf-8',
-                stdout=subprocess.PIPE).stdout.strip()
-            if out:
-                logging.info(out)
+    logging.info('({}) {}: {}'.format(
+        jobId, args.jobDefinition, args.command))
+    try:
+        while True:
+            time.sleep(1)
+            describeJobsResponse = batch.describe_jobs(jobs=[jobId])
+            job = describeJobsResponse['jobs'][0]
+            if status != job['status']:
+                status = job['status'].strip()
+                if status not in ['SUCCEEDED', 'FAILED']:
+                    logging.info(status)
+                if status in ['RUNNING', 'SUCCEEDED', 'FAILED']:
+                    if (logStreamName is None and
+                            'logStreamName' in job['container']):
+                        logStreamName = job['container']['logStreamName']
+                    if logStreamName:
+                        startTime = printLogs(
+                            cloudwatch, logStreamName, startTime)
+                        startTime += 1
+                if status in ['SUCCEEDED', 'FAILED']:
+                    logging.info(status)
+                    break
+    except BaseException as e:
+        logging.info('FAILED')
+        batch.cancel_job(jobId=jobId, reason=repr(e))
+        raise e
+    finally:
+        if args.bucket:
+            s3_download(args.bucket, downloads)
+            if args.teardown:
+                cloud_path = os.path.join(args.bucket, workdir)
+                cmd = 'aws s3 rm --recursive ' + cloud_path
+                out = subprocess.run(
+                    cmd.split(),
+                    check=True,
+                    encoding='utf-8',
+                    stdout=subprocess.PIPE).stdout.strip()
+                if out:
+                    logging.info(out)
 
 
 if __name__ == "__main__":
